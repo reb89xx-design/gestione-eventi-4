@@ -1,10 +1,120 @@
 # utils.py
+# Aggiornato per evitare DetachedInstanceError: eager load delle relazioni e helper di serializzazione
+
 from db import SessionLocal
 from models import Event, Artist, Format, Resource, Promoter, User
 from datetime import date, datetime, timedelta
 from sqlalchemy.orm import joinedload
 
-# ---------- EVENTS ----------
+# ---------- helper: serializzazione evento ----------
+def serialize_event(ev):
+    """
+    Converte un'istanza Event in dict semplice con campi utili per la UI.
+    Utile se vuoi evitare del tutto dipendenze da oggetti ORM nella view.
+    """
+    return {
+        "id": ev.id,
+        "title": ev.title,
+        "date": ev.date.isoformat() if ev.date else None,
+        "format": {"id": ev.format.id, "name": ev.format.name} if getattr(ev, "format", None) else None,
+        "promoter": {"id": ev.promoter.id, "name": ev.promoter.name} if getattr(ev, "promoter", None) else None,
+        "location": ev.location,
+        "notes": ev.notes,
+        "status": ev.status,
+        "artists": [{"id": a.id, "name": a.name, "calendar_color": a.calendar_color} for a in getattr(ev, "artists", [])],
+        "resources": [{"id": r.id, "name": r.name, "type": r.type} for r in getattr(ev, "resources", [])],
+    }
+
+# ---------- EVENTS (con eager loading) ----------
+def list_events_by_month(year, month, serialize=False):
+    db = SessionLocal()
+    try:
+        start = date(year, month, 1)
+        if month == 12:
+            end = date(year + 1, 1, 1)
+        else:
+            end = date(year, month + 1, 1)
+        q = (
+            db.query(Event)
+            .filter(Event.date >= start, Event.date < end)
+            .options(
+                joinedload(Event.artists),
+                joinedload(Event.format),
+                joinedload(Event.resources),
+                joinedload(Event.promoter),
+            )
+            .order_by(Event.date)
+        )
+        results = q.all()
+        if serialize:
+            return [serialize_event(ev) for ev in results]
+        return results
+    finally:
+        db.close()
+
+def list_all_events(serialize=False):
+    db = SessionLocal()
+    try:
+        q = (
+            db.query(Event)
+            .options(
+                joinedload(Event.artists),
+                joinedload(Event.format),
+                joinedload(Event.resources),
+                joinedload(Event.promoter),
+            )
+            .order_by(Event.date.desc())
+        )
+        results = q.all()
+        if serialize:
+            return [serialize_event(ev) for ev in results]
+        return results
+    finally:
+        db.close()
+
+def list_upcoming_events(limit=10, serialize=False):
+    db = SessionLocal()
+    try:
+        today = date.today()
+        q = (
+            db.query(Event)
+            .filter(Event.date >= today)
+            .options(
+                joinedload(Event.artists),
+                joinedload(Event.format),
+                joinedload(Event.resources),
+                joinedload(Event.promoter),
+            )
+            .order_by(Event.date)
+            .limit(limit)
+        )
+        results = q.all()
+        if serialize:
+            return [serialize_event(ev) for ev in results]
+        return results
+    finally:
+        db.close()
+
+def get_event(event_id, serialize=False):
+    db = SessionLocal()
+    try:
+        ev = (
+            db.query(Event)
+            .filter(Event.id == event_id)
+            .options(
+                joinedload(Event.artists),
+                joinedload(Event.format),
+                joinedload(Event.resources),
+                joinedload(Event.promoter),
+            )
+            .first()
+        )
+        if serialize and ev:
+            return serialize_event(ev)
+        return ev
+    finally:
+        db.close()
+
 def create_event(title, date_, format_obj=None, promoter_obj=None, location=None, notes=None, status="proposta", artist_objs=None, resource_objs=None):
     db = SessionLocal()
     try:
@@ -18,6 +128,8 @@ def create_event(title, date_, format_obj=None, promoter_obj=None, location=None
         db.add(ev)
         db.commit()
         db.refresh(ev)
+        # carica relazioni per sicurezza
+        ev = db.query(Event).options(joinedload(Event.artists), joinedload(Event.format), joinedload(Event.resources), joinedload(Event.promoter)).get(ev.id)
         return ev
     finally:
         db.close()
@@ -26,11 +138,16 @@ def update_event(event_id, **kwargs):
     db = SessionLocal()
     try:
         ev = db.query(Event).get(event_id)
+        if not ev:
+            return None
         for k, v in kwargs.items():
+            # supporta passaggio di oggetti ORM per format/promoter
             setattr(ev, k, v)
         db.add(ev)
         db.commit()
         db.refresh(ev)
+        # ricarica con relazioni
+        ev = db.query(Event).options(joinedload(Event.artists), joinedload(Event.format), joinedload(Event.resources), joinedload(Event.promoter)).get(ev.id)
         return ev
     finally:
         db.close()
@@ -39,43 +156,9 @@ def delete_event(event_id):
     db = SessionLocal()
     try:
         ev = db.query(Event).get(event_id)
-        db.delete(ev)
-        db.commit()
-    finally:
-        db.close()
-
-def list_events_by_month(year, month):
-    db = SessionLocal()
-    try:
-        start = date(year, month, 1)
-        if month == 12:
-            end = date(year + 1, 1, 1)
-        else:
-            end = date(year, month + 1, 1)
-        q = db.query(Event).filter(Event.date >= start, Event.date < end).options(joinedload(Event.artists), joinedload(Event.format))
-        return q.order_by(Event.date).all()
-    finally:
-        db.close()
-
-def list_all_events():
-    db = SessionLocal()
-    try:
-        return db.query(Event).options(joinedload(Event.artists), joinedload(Event.format)).order_by(Event.date.desc()).all()
-    finally:
-        db.close()
-
-def get_event(event_id):
-    db = SessionLocal()
-    try:
-        return db.query(Event).get(event_id)
-    finally:
-        db.close()
-
-def list_upcoming_events(limit=10):
-    db = SessionLocal()
-    try:
-        today = date.today()
-        return db.query(Event).filter(Event.date >= today).order_by(Event.date).limit(limit).all()
+        if ev:
+            db.delete(ev)
+            db.commit()
     finally:
         db.close()
 

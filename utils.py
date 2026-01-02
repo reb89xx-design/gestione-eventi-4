@@ -1,14 +1,20 @@
 # utils.py
 from db import SessionLocal
 from models import Event, Artist, Format, Resource, Promoter, User
-from datetime import date
+from datetime import date, datetime, timedelta
 from sqlalchemy.orm import joinedload
 
 # ---------- EVENTS ----------
-def create_event(**kwargs):
+def create_event(title, date_, format_obj=None, promoter_obj=None, location=None, notes=None, status="proposta", artist_objs=None, resource_objs=None):
     db = SessionLocal()
     try:
-        ev = Event(**kwargs)
+        ev = Event(date=date_, title=title, format=format_obj, promoter=promoter_obj, location=location, notes=notes, status=status)
+        if artist_objs:
+            for a in artist_objs:
+                ev.artists.append(a)
+        if resource_objs:
+            for r in resource_objs:
+                ev.resources.append(r)
         db.add(ev)
         db.commit()
         db.refresh(ev)
@@ -42,13 +48,34 @@ def list_events_by_month(year, month):
     db = SessionLocal()
     try:
         start = date(year, month, 1)
-        # naive end-of-month
         if month == 12:
             end = date(year + 1, 1, 1)
         else:
             end = date(year, month + 1, 1)
         q = db.query(Event).filter(Event.date >= start, Event.date < end).options(joinedload(Event.artists), joinedload(Event.format))
-        return q.all()
+        return q.order_by(Event.date).all()
+    finally:
+        db.close()
+
+def list_all_events():
+    db = SessionLocal()
+    try:
+        return db.query(Event).options(joinedload(Event.artists), joinedload(Event.format)).order_by(Event.date.desc()).all()
+    finally:
+        db.close()
+
+def get_event(event_id):
+    db = SessionLocal()
+    try:
+        return db.query(Event).get(event_id)
+    finally:
+        db.close()
+
+def list_upcoming_events(limit=10):
+    db = SessionLocal()
+    try:
+        today = date.today()
+        return db.query(Event).filter(Event.date >= today).order_by(Event.date).limit(limit).all()
     finally:
         db.close()
 
@@ -196,7 +223,7 @@ def delete_promoter(promoter_id):
     finally:
         db.close()
 
-# ---------- RESOURCES (DJ, VOCALIST, BALLERINA, SERVICE, TOUR MANAGER, MASCOTTE) ----------
+# ---------- RESOURCES ----------
 def create_resource(name, type, contact=None, availability=None):
     db = SessionLocal()
     try:

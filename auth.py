@@ -1,7 +1,4 @@
 # auth.py
-# Autenticazione leggera per Event Manager (Streamlit)
-# Usa pbkdf2_sha256 per evitare dipendenze native e include fallback per il rerun
-
 import streamlit as st
 from datetime import datetime
 from passlib.context import CryptContext
@@ -14,10 +11,8 @@ from db import SessionLocal
 # -------------------------
 def safe_rerun():
     """
-    Tentativo di forzare un rerun in modo compatibile con più versioni di Streamlit.
-    - Prova st.experimental_rerun()
-    - Se non disponibile, modifica i query params con un timestamp
-    - Se anche quello fallisce, toggle di session_state come ultima risorsa
+    Try to call st.experimental_rerun(); if not available, toggle a query param
+    to force Streamlit to rerun the script.
     """
     try:
         st.experimental_rerun()
@@ -30,7 +25,6 @@ def safe_rerun():
 # -------------------------
 # Hashing password
 # -------------------------
-# Uso pbkdf2_sha256 per compatibilità e sicurezza senza dipendenze C
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
 def hash_password(password: str) -> str:
@@ -40,7 +34,7 @@ def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
 
 # -------------------------
-# DB helpers & autenticazione
+# DB helpers & authentication
 # -------------------------
 def get_user_by_username(db: Session, username: str):
     return db.query(User).filter(User.username == username).first()
@@ -58,7 +52,7 @@ def authenticate(username: str, password: str):
         db.close()
 
 # -------------------------
-# Widget Streamlit per login
+# Widget Streamlit for login
 # -------------------------
 def login_widget():
     if "user" not in st.session_state:

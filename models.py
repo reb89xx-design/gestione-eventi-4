@@ -55,7 +55,7 @@ class Resource(Base):
     __tablename__ = "resources"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
-    type = Column(String, index=True)  # Service, Tour Manager, Mascotte, Vocalist, Ballerina, ecc.
+    type = Column(String, index=True)  # DJ, Vocalist, Ballerina, Service, Tour Manager, Mascotte
     contact = Column(String, nullable=True)
     availability = Column(Text, nullable=True)
 

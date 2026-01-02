@@ -38,7 +38,7 @@ def seed():
             db.add_all([p1, p2])
             db.commit()
 
-        # Resources: DJ, Vocalist, Ballerine, Service, Tour Manager, Mascotte
+        # Resources: DJ, Vocalist, Ballerina, Service, Tour Manager, Mascotte
         if not db.query(Resource).first():
             r1 = Resource(name="DJ Marco", type="DJ", contact="djmarco@example.com")
             r2 = Resource(name="Vocalist Anna", type="Vocalist", contact="anna@example.com")

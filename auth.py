@@ -5,7 +5,8 @@ from sqlalchemy.orm import Session
 from models import User
 from db import SessionLocal
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Usa pbkdf2_sha256 per evitare dipendenze native (compatibile e sicuro)
+pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
 # Utility: hash & verify
 def hash_password(password: str) -> str:
